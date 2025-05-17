@@ -1,0 +1,267 @@
+﻿@page "/Patients"
+@using adminnn.Models
+@inject AppDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+
+<PageTitle>Patient Management</PageTitle>
+
+<h3>Patient Management</h3>
+
+<!-- Search Filters -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <input placeholder="Search by name" class="form-control" @bind="searchQuery" @bind:event="oninput" />
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" @bind="searchGender" @bind:event="onchange">
+            <option value="">All Genders</option>
+            <option>Male</option>
+            <option>Female</option>
+            <option>Other</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100" @onclick="ShowAddModal">+ Add Patient</button>
+    </div>
+</div>
+
+<!-- Patients Table -->
+<table class="table table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>ID</th>
+            <th>Full Name</th>
+            <th>Age</th>
+            <th>Gender</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (FilteredPatients.Count == 0)
+        {
+            <tr><td colspan="7" class="text-center">No patients found.</td></tr>
+        }
+        else
+        {
+            @foreach (var p in FilteredPatients)
+            {
+                <tr>
+                    <td>@p.PatientId</td>
+                    <td>@p.FullName</td>
+                    <td>@p.Age</td>
+                    <td>@p.Gender</td>
+                    <td>@p.Email</td>
+                    <td>@p.PhoneNumber</td>
+                    <td>
+                        <button class="btn btn-sm btn-info me-1" @onclick="() => ViewMedicalHistory(p.PatientId)">History</button>
+                        <button class="btn btn-sm btn-warning me-1" @onclick="() => EditPatient(p.PatientId)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeletePatient(p.PatientId)">Delete</button>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+<!-- Add/Edit Modal -->
+@if (showPatientModal)
+{
+    <div class="modal d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>@(isEditing ? "Edit" : "Add") Patient</h5>
+                    <button class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">First Name</label>
+                        <input class="form-control" @bind="currentPatient.FirstName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Surname</label>
+                        <input class="form-control" @bind="currentPatient.Surname" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Date of Birth</label>
+                        <input type="date" class="form-control" @bind="currentPatient.DateOfBirth" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Gender</label>
+                        <select class="form-select" @bind="currentPatient.Gender">
+                            <option>Male</option>
+                            <option>Female</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" @bind="currentPatient.Email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input class="form-control" @bind="currentPatient.PhoneNumber" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medical History</label>
+                        <textarea class="form-control" @bind="currentPatient.MedicalHistory"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SavePatient">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Medical History Modal -->
+@if (showMedicalHistoryModal)
+{
+    <div class="modal d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Medical History</h5>
+                    <button class="btn-close" @onclick="CloseMedicalHistoryModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>@selectedMedicalHistory</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" @onclick="CloseMedicalHistoryModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string searchQuery = "";
+    private string searchGender = "";
+    private bool showPatientModal = false;
+    private bool showMedicalHistoryModal = false;
+    private bool isEditing = false;
+    private string selectedMedicalHistory = "";
+    private Patient currentPatient = new();
+    private List<Patient> FilteredPatients = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPatients();
+    }
+
+    private async Task LoadPatients()
+    {
+        var query = DbContext.Patients.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+            query = query.Where(p => (p.FirstName + " " + p.Surname).Contains(searchQuery));
+
+        if (!string.IsNullOrWhiteSpace(searchGender))
+            query = query.Where(p => p.Gender == searchGender);
+
+        FilteredPatients = await query.ToListAsync();
+    }
+
+    private void ShowAddModal()
+    {
+        currentPatient = new Patient
+        {
+            DateOfBirth = DateTime.Today.AddYears(-20)
+        };
+        isEditing = false;
+        showPatientModal = true;
+    }
+
+    private void EditPatient(int id)
+    {
+        var patient = DbContext.Patients.FirstOrDefault(p => p.PatientId == id);
+        currentPatient = patient?.Clone() ?? new Patient();
+        isEditing = true;
+        showPatientModal = true;
+    }
+
+    private void ViewMedicalHistory(int id)
+    {
+        selectedMedicalHistory = DbContext.Patients.FirstOrDefault(p => p.PatientId == id)?.MedicalHistory ?? "Not available";
+        showMedicalHistoryModal = true;
+    }
+
+    private async Task DeletePatient(int id)
+    {
+        var patient = DbContext.Patients.FirstOrDefault(p => p.PatientId == id);
+        if (patient != null)
+        {
+            DbContext.Patients.Remove(patient);
+            await DbContext.SaveChangesAsync();
+            await LoadPatients();
+        }
+    }
+
+    private async Task SavePatient()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(currentPatient.FirstName) || string.IsNullOrWhiteSpace(currentPatient.Surname))
+            {
+                Console.WriteLine("Full name is required.");
+                return;
+            }
+
+            if (currentPatient.DateOfBirth == default)
+            {
+                Console.WriteLine("Date of Birth is required.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(currentPatient.Email))
+            {
+                Console.WriteLine("Email is required.");
+                return;
+            }
+
+            if (isEditing)
+            {
+                var patientInDb = await DbContext.Patients.FindAsync(currentPatient.PatientId);
+                if (patientInDb != null)
+                {
+                    patientInDb.FirstName = currentPatient.FirstName;
+                    patientInDb.Surname = currentPatient.Surname;
+                    patientInDb.DateOfBirth = currentPatient.DateOfBirth;
+                    patientInDb.Gender = currentPatient.Gender;
+                    patientInDb.PhoneNumber = currentPatient.PhoneNumber;
+                    patientInDb.Email = currentPatient.Email;
+                    patientInDb.MedicalHistory = currentPatient.MedicalHistory;
+                }
+                else
+                {
+                    Console.WriteLine("Patient not found in database.");
+                    return;
+                }
+            }
+            else
+            {
+                currentPatient.PatientId = 0;
+                await DbContext.Patients.AddAsync(currentPatient);
+            }
+
+            await DbContext.SaveChangesAsync();
+            await LoadPatients();
+            CloseModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving patient: {ex.Message}");
+            if (ex.InnerException != null)
+                Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        }
+    }
+
+    private void CloseModal() => showPatientModal = false;
+    private void CloseMedicalHistoryModal() => showMedicalHistoryModal = false;
+}

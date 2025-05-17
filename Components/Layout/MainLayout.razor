@@ -1,0 +1,39 @@
+﻿@inherits LayoutComponentBase
+
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <div class="main-content">
+        <div class="doctor-management">
+            <!-- Navbar -->
+            <nav class="admin-navbar">
+                <div class="navbar-left">
+                    <div class="user-profile">
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Admin User" />
+                        <span>Admin User</span>
+                    </div>
+                </div>
+                <div class="navbar-right">
+                    <button class="logout-btn" @onclick="Logout">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                </div>
+            </nav>
+
+            <div class="content-area">
+                @Body
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private void Logout()
+    {
+        // Implement your logout logic here
+        //navigationManager.NavigateTo("/logout");
+    }
+}

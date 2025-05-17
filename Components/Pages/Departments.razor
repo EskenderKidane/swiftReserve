@@ -1,0 +1,182 @@
+﻿@page "/Departments"
+@rendermode InteractiveServer
+@inject AppDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@using adminnn.Models
+
+<div class="department-management">
+    <!-- Header -->
+    <div class="page-header">
+        <h2><i class="fas fa-clinic-medical"></i> Department Management</h2>
+        <button class="btn btn-primary" @onclick="ShowAddDepartmentModal">
+            <i class="fas fa-plus"></i> Add Department
+        </button>
+    </div>
+
+    <!-- Department Table -->
+    <div class="table-container">
+        <table class="department-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Head Doctor</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var dept in departments)
+                {
+                    <tr>
+                        <td>@dept.Id</td>
+                        <td>@dept.Name</td>
+                        <td>@dept.HeadDoctor</td>
+                        <td>@dept.Email</td>
+                        <td>
+                            <span class="badge @(dept.IsActive ? "badge-active" : "badge-inactive")">
+                                @(dept.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-edit" @onclick="() => EditDepartment(dept.Id)">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-delete" @onclick="() => DeleteDepartment(dept.Id)">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    @if (showModal)
+    {
+        <div class="modal fade show d-block" style="background-color: rgba(0,0,0,0.5);" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(isEditing ? "Edit Department" : "Add New Department")</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label>Name *</label>
+                            <input type="text" class="form-control" @bind="currentDepartment.Name" />
+                        </div>
+                        <div class="mb-3">
+                            <label>Head Doctor</label>
+                            <input type="text" class="form-control" @bind="currentDepartment.HeadDoctor" />
+                        </div>
+                        <div class="mb-3">
+                            <label>Email</label>
+                            <input type="email" class="form-control" @bind="currentDepartment.Email" />
+                        </div>
+                        <div class="mb-3">
+                            <label>Description</label>
+                            <textarea class="form-control" @bind="currentDepartment.Description"></textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" @bind="currentDepartment.IsActive" />
+                            <label class="form-check-label">Active Department</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                        <button class="btn btn-primary" @onclick="SaveDepartment">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+
+@code {
+    private List<Department> departments = new();
+    private Department currentDepartment = new();
+    private bool showModal = false;
+    private bool isEditing = false;
+
+    // Make sure to await this method
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DbContext.Departments.ToListAsync();
+    }
+
+    private async Task ShowAddDepartmentModal()
+    {
+        currentDepartment = new Department(); // Clear out the current department for adding
+        isEditing = false; // Set to false to indicate new entry
+        showModal = true; // Show the modal for adding a department
+    }
+
+    private async Task EditDepartment(int id)
+    {
+        var deptToEdit = await DbContext.Departments.FindAsync(id);
+        if (deptToEdit != null)
+        {
+            currentDepartment = new Department
+            {
+                Id = deptToEdit.Id,
+                Name = deptToEdit.Name,
+                HeadDoctor = deptToEdit.HeadDoctor,
+                Email = deptToEdit.Email,
+                Description = deptToEdit.Description,
+                IsActive = deptToEdit.IsActive,
+                CreatedDate = deptToEdit.CreatedDate,
+                UpdatedDate = deptToEdit.UpdatedDate
+            };
+            isEditing = true; // Set to true to indicate editing mode
+            showModal = true; // Show the modal for editing
+        }
+    }
+
+    private async Task DeleteDepartment(int id)
+    {
+        var deptToDelete = await DbContext.Departments.FindAsync(id);
+        if (deptToDelete != null)
+        {
+            DbContext.Departments.Remove(deptToDelete);
+            await DbContext.SaveChangesAsync(); // Save changes asynchronously
+            departments = await DbContext.Departments.ToListAsync(); // Refresh the department list
+        }
+    }
+
+    private async Task SaveDepartment()
+    {
+        if (isEditing)
+        {
+            var dept = await DbContext.Departments.FindAsync(currentDepartment.Id);
+            if (dept != null)
+            {
+                dept.Name = currentDepartment.Name;
+                dept.HeadDoctor = currentDepartment.HeadDoctor;
+                dept.Email = currentDepartment.Email;
+                dept.Description = currentDepartment.Description;
+                dept.IsActive = currentDepartment.IsActive;
+                dept.UpdatedDate = DateTime.Now;
+
+                await DbContext.SaveChangesAsync(); // Save changes asynchronously
+            }
+        }
+        else
+        {
+            currentDepartment.CreatedDate = DateTime.Now; // Set the created date
+            DbContext.Departments.Add(currentDepartment); // Add new department
+            await DbContext.SaveChangesAsync(); // Save changes asynchronously
+        }
+
+        departments = await DbContext.Departments.ToListAsync(); // Refresh department list
+        showModal = false; // Close the modal after saving
+    }
+
+    private void CloseModal()
+    {
+        showModal = false; // Close the modal without saving
+    }
+}

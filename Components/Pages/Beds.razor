@@ -1,0 +1,268 @@
+﻿@page "/beds"
+@using adminnn.Models
+@inject AppDbContext DbContext
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+
+<h3>Beds Management</h3>
+
+<button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+    <i class="fas fa-plus"></i> Add Bed
+</button>
+
+<table class="table table-striped table-hover mt-3">
+    <thead class="thead-dark">
+        <tr>
+            <th>Room Number</th>
+            <th>Bed Number</th>
+            <th>Status</th>
+            <th>Patient</th>
+            <th>Department</th> <!-- New column for Department -->
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var bed in beds)
+        {
+            <tr>
+                <td>@bed.RoomNumber</td>
+                <td>@bed.BedNumber</td>
+                <td>
+                    <span class="badge @GetStatusBadgeClass(bed.Status)">
+                        @bed.Status
+                    </span>
+                </td>
+                <td>@(bed.PatientId.HasValue ? availablePatients.FirstOrDefault(p => p.PatientId == bed.PatientId)?.FullName : "None")</td>
+                <td>@(bed.Department?.Name ?? "None")</td> <!-- Show department name -->
+                <td>
+                    @if (bed.Status == "Occupied")
+                    {
+                        <button class="btn btn-sm btn-danger" @onclick="() => ReleaseBed(bed.BedId)">
+                            <i class="fas fa-user-minus"></i> Release
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-info" @onclick="() => ShowAssignModal(bed)">
+                            <i class="fas fa-user-plus"></i> Assign
+                        </button>
+                    }
+                    <!-- Add the Delete button here -->
+                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteBed(bed.BedId)">
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Add Bed Modal -->
+@if (showAddModal)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5)" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Add New Bed</h5>
+                    <button type="button" class="close text-white" @onclick="CloseAddModal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Room Number</label>
+                        <input type="text" @bind="newBed.RoomNumber" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>Bed Number</label>
+                        <input type="text" @bind="newBed.BedNumber" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select @bind="newBed.Status" class="form-control">
+                            <option value="Available">Available</option>
+                            <option value="Occupied">Occupied</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assign to Patient (Optional)</label>
+                        <select @bind="newBed.PatientId" class="form-control">
+                            <option value="">-- None --</option>
+                            @foreach (var patient in availablePatients)
+                            {
+                                <option value="@patient.PatientId">@patient.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Department</label> <!-- New department dropdown -->
+                        <select @bind="newBed.DepartmentId" class="form-control">
+                            <option value="">-- None --</option>
+                            @foreach (var department in departments)
+                            {
+                                <option value="@department.Id">@department.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseAddModal">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button class="btn btn-primary" @onclick="SaveNewBed">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Assign Patient Modal -->
+@if (showAssignModal)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5)" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Assign Patient to Bed @selectedBed?.BedNumber</h5>
+                    <button type="button" class="close text-white" @onclick="CloseAssignModal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Patient</label>
+                        <select @bind="selectedPatientId" class="form-control">
+                            @foreach (var patient in availablePatients)
+                            {
+                                <option value="@patient.PatientId">@patient.FullName</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseAssignModal">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button class="btn btn-info" @onclick="AssignBed">
+                        <i class="fas fa-user-plus"></i> Assign
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Bed> beds = new();
+    private List<Patient> availablePatients = new();
+    private List<Department> departments = new(); // New list for departments
+    private bool showAddModal = false;
+    private bool showAssignModal = false;
+    private Bed selectedBed = new();
+    private int? selectedPatientId;
+    private Bed newBed = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Available" => "badge-success",
+            "Occupied" => "badge-danger",
+            _ => "badge-secondary"
+        };
+    }
+
+    private async Task LoadData()
+    {
+        beds = await DbContext.Beds.Include(b => b.Patient).Include(b => b.Department).ToListAsync(); // Load department data
+        availablePatients = await DbContext.Patients.ToListAsync();
+        departments = await DbContext.Departments.ToListAsync(); // Load departments
+    }
+
+    private void ShowAddModal()
+    {
+        newBed = new Bed { Status = "Available" };
+        showAddModal = true;
+    }
+
+    private void CloseAddModal()
+    {
+        showAddModal = false;
+    }
+
+    private void ShowAssignModal(Bed bed)
+    {
+        selectedBed = bed;
+        selectedPatientId = availablePatients.FirstOrDefault()?.PatientId;
+        showAssignModal = true;
+    }
+
+    private void CloseAssignModal()
+    {
+        showAssignModal = false;
+    }
+
+    private async Task SaveNewBed()
+    {
+        if (string.IsNullOrWhiteSpace(newBed.RoomNumber) || string.IsNullOrWhiteSpace(newBed.BedNumber))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Please fill in all fields");
+            return;
+        }
+
+        await DbContext.Beds.AddAsync(newBed);
+        await DbContext.SaveChangesAsync();
+
+        await LoadData();
+        CloseAddModal();
+    }
+
+    private async Task AssignBed()
+    {
+        if (selectedPatientId.HasValue && selectedBed != null)
+        {
+            selectedBed.Status = "Occupied";
+            selectedBed.PatientId = selectedPatientId.Value;
+            DbContext.Beds.Update(selectedBed);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+        CloseAssignModal();
+    }
+
+    private async Task ReleaseBed(int bedId)
+    {
+        var bed = await DbContext.Beds.FirstOrDefaultAsync(b => b.BedId == bedId);
+        if (bed != null)
+        {
+            bed.Status = "Available";
+            bed.PatientId = null;
+            DbContext.Beds.Update(bed);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+    }
+
+    private async Task DeleteBed(int bedId)
+    {
+        // Fetch the bed by its ID
+        var bed = await DbContext.Beds.FirstOrDefaultAsync(b => b.BedId == bedId);
+
+        // If the bed exists, delete it
+        if (bed != null)
+        {
+            DbContext.Beds.Remove(bed);
+            await DbContext.SaveChangesAsync();
+            await LoadData(); // Reload the data to reflect the changes
+        }
+    }
+}

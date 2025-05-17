@@ -1,0 +1,320 @@
+﻿@page "/appointments"
+@using adminnn.Models
+@inject AppDbContext DbContext
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@using System.Globalization
+
+<h3 class="page-title">Appointments</h3>
+
+<div class="form-section">
+    <button class="btn btn-primary mb-3" @onclick="ShowAddModal">Add Appointment</button>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Patient</th>
+            <th>Doctor</th>
+            <th>Department</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var appointment in appointments)
+        {
+            <tr>
+                <td>@appointment.AppointmentDate.ToShortDateString()</td>
+                <td>@($"{appointment.AppointmentTime:hh\\:mm} - {appointment.AppointmentTime.Add(TimeSpan.FromMinutes(30)):hh\\:mm}")</td>
+                <td>@appointment.Patient?.FullName</td>
+                <td>@appointment.Doctor?.Name</td>
+                <td>@appointment.Department?.Name</td>
+                <td>
+                    <button class="btn btn-warning btn-sm" @onclick="@(() => EditAppointment(appointment))">Edit</button>
+                    <button class="btn btn-danger btn-sm" @onclick="@(() => DeleteAppointment(appointment.Id))">Delete</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (isModalOpen)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" @onclick="CloseModal">
+        <div class="modal-dialog" @onclick:stopPropagation>
+            <div class="modal-content p-3">
+                <h5>@(editingAppointment.Id == 0 ? "Add" : "Edit") Appointment</h5>
+
+                <div class="mb-2">
+                    <label>Date:</label>
+                    <input type="date" class="form-control"
+                           value="@editingAppointment.AppointmentDate.ToString("yyyy-MM-dd")"
+                           @onchange="OnDateChanged" />
+                </div>
+
+                <div class="mb-2">
+                    <label>Patient:</label>
+                    <select class="form-select" @bind="editingAppointment.PatientId">
+                        <option value="">Select patient</option>
+                        @foreach (var patient in patients)
+                        {
+                            <option value="@patient.PatientId">@patient.FullName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label>Doctor:</label>
+<select class="form-select" value="@editingAppointment.DoctorId" @onchange="OnDoctorChanged">
+                        <option value="">Select doctor</option>
+                        @foreach (var doctor in doctors)
+                        {
+                            <option value="@doctor.Id">@doctor.Name</option>
+                        }
+                    </select>
+                </div>
+
+                @if (selectedShiftStart != null && selectedShiftEnd != null)
+                {
+                    <div class="mb-2 alert alert-info">
+                        Doctor shift is between @selectedShiftStart:hh\\:mm and @selectedShiftEnd:hh\\:mm
+                    </div>
+
+                    <div class="mb-2">
+                        <label>Time Slot:</label>
+                        <select class="form-select" @bind="editingTimeString">
+                            @foreach (var slot in availableTimeSlots)
+                            {
+                                <option value="@slot">@slot</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="mb-2">
+                    <label>Department:</label>
+                    <select class="form-select" @bind="editingAppointment.DepartmentId">
+                        <option value="">Select department</option>
+                        @foreach (var department in departments)
+                        {
+                            <option value="@department.Id">@department.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mt-3 text-end">
+                    <button class="btn btn-secondary me-2" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveAppointment">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Appointment> appointments = new();
+    private List<Patient> patients = new();
+    private List<Doctor> doctors = new();
+    private List<Department> departments = new();
+
+    private Appointment editingAppointment = new Appointment();
+    private bool isModalOpen = false;
+
+    // Shift time and slots
+    private TimeSpan? selectedShiftStart = null;
+    private TimeSpan? selectedShiftEnd = null;
+    private List<string> availableTimeSlots = new List<string>();
+
+    private string editingTimeString = ""; // selected time slot as string (e.g. "09:00")
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        appointments = await DbContext.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Doctor)
+            .Include(a => a.Department)
+            .ToListAsync();
+
+        patients = await DbContext.Patients.ToListAsync();
+doctors = await DbContext.Doctors
+            .Where(d => d.Status.ToLower() == "active") // case-insensitive check
+            .ToListAsync();
+        departments = await DbContext.Departments.ToListAsync();
+    }
+
+    private void ShowAddModal()
+    {
+        editingAppointment = new Appointment
+        {
+            AppointmentDate = DateTime.Today,
+            PatientId = 0,
+            DoctorId = 0,
+            DepartmentId = 0,
+        };
+
+        selectedShiftStart = null;
+        selectedShiftEnd = null;
+        availableTimeSlots.Clear();
+        editingTimeString = "";
+
+        isModalOpen = true;
+    }
+
+    private void EditAppointment(Appointment appointment)
+    {
+        editingAppointment = new Appointment
+        {
+            Id = appointment.Id,
+            AppointmentDate = appointment.AppointmentDate,
+            PatientId = appointment.PatientId,
+            DoctorId = appointment.DoctorId,
+            DepartmentId = appointment.DepartmentId,
+        };
+
+        // Parse shift of the doctor's shift time
+        var doctor = doctors.FirstOrDefault(d => d.Id == appointment.DoctorId);
+        if (doctor != null)
+        {
+            (selectedShiftStart, selectedShiftEnd) = ParseShiftTime(doctor.ShiftTime);
+            GenerateTimeSlots();
+        }
+        else
+        {
+            selectedShiftStart = null;
+            selectedShiftEnd = null;
+            availableTimeSlots.Clear();
+        }
+
+        // Format time slot string with 30 min interval end
+        editingTimeString = $"{appointment.AppointmentTime:hh\\:mm}";
+
+        isModalOpen = true;
+    }
+
+    private async Task SaveAppointment()
+    {
+        if (string.IsNullOrWhiteSpace(editingTimeString))
+        {
+            // No time selected, fail gracefully
+            return;
+        }
+
+        if (!TimeSpan.TryParse(editingTimeString, out var selectedTime))
+        {
+            // Invalid time format fallback
+            selectedTime = TimeSpan.FromHours(8);
+        }
+
+        editingAppointment.AppointmentTime = selectedTime;
+
+        if (editingAppointment.Id == 0)
+        {
+            DbContext.Appointments.Add(editingAppointment);
+        }
+        else
+        {
+            DbContext.Appointments.Update(editingAppointment);
+        }
+
+        await DbContext.SaveChangesAsync();
+        await LoadData();
+        CloseModal();
+    }
+
+    private async Task DeleteAppointment(int id)
+    {
+        var appointment = await DbContext.Appointments.FindAsync(id);
+        if (appointment != null)
+        {
+            DbContext.Appointments.Remove(appointment);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+    }
+
+    private void CloseModal()
+    {
+        isModalOpen = false;
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            editingAppointment.AppointmentDate = date;
+        }
+    }
+
+    private void OnDoctorChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var doctorId))
+        {
+            editingAppointment.DoctorId = doctorId;
+
+            var doctor = doctors.FirstOrDefault(d => d.Id == doctorId);
+            if (doctor != null)
+            {
+                (selectedShiftStart, selectedShiftEnd) = ParseShiftTime(doctor.ShiftTime);
+                GenerateTimeSlots();
+
+                // Auto-select first available slot if any
+                editingTimeString = availableTimeSlots.FirstOrDefault() ?? "";
+            }
+            else
+            {
+                selectedShiftStart = null;
+                selectedShiftEnd = null;
+                availableTimeSlots.Clear();
+                editingTimeString = "";
+            }
+        }
+        else
+        {
+            selectedShiftStart = null;
+            selectedShiftEnd = null;
+            availableTimeSlots.Clear();
+            editingTimeString = "";
+        }
+    }
+
+    private (TimeSpan? Start, TimeSpan? End) ParseShiftTime(string shiftTime)
+    {
+        if (string.IsNullOrWhiteSpace(shiftTime))
+            return (null, null);
+
+        var parts = shiftTime.Split('-');
+        if (parts.Length != 2)
+            return (null, null);
+
+        bool startParsed = TimeSpan.TryParse(parts[0], out var start);
+        bool endParsed = TimeSpan.TryParse(parts[1], out var end);
+
+        if (startParsed && endParsed)
+            return (start, end);
+
+        return (null, null);
+    }
+
+    private void GenerateTimeSlots()
+    {
+        availableTimeSlots.Clear();
+
+        if (selectedShiftStart == null || selectedShiftEnd == null)
+            return;
+
+        // Generate 30 minute slots from start to end minus 30 min (to avoid overflow)
+        var current = selectedShiftStart.Value;
+        while (current + TimeSpan.FromMinutes(30) <= selectedShiftEnd.Value)
+        {
+            availableTimeSlots.Add(current.ToString(@"hh\:mm"));
+            current += TimeSpan.FromMinutes(30);
+        }
+    }
+}

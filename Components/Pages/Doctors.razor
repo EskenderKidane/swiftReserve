@@ -1,0 +1,312 @@
+﻿@page "/doctors"
+@using adminnn.Models
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext DbContext
+@rendermode InteractiveServer
+
+<PageTitle>Manage Doctors</PageTitle>
+
+<div class="doctor-management">
+    <div class="page-header">
+        <h1>Doctors</h1>
+        <button class="add-doctor-btn" @onclick="ShowAddModal">
+            <i class="fas fa-plus"></i> Add Doctor
+        </button>
+    </div>
+
+    <div class="doctor-content">
+        <table class="doctors-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Specialization</th>
+                    <th>Contact</th>
+                    <th>Shift Time</th>
+                    <th>Day Off</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doctor in doctors)
+                {
+                    <tr>
+                        <td>@doctor.Id</td>
+                        <td>@doctor.Name</td>
+                        <td>@doctor.UsernameOrEmail</td>
+                        <td>@doctor.Specialization</td>
+                        <td>@doctor.Contact</td>
+                        <td>@doctor.ShiftTime</td>
+                        <td>@(doctor.DayOff.HasValue ? ((DayOfWeek)doctor.DayOff.Value).ToString() : "Not Set")</td>
+                        <td>
+                            <span class="badge @(doctor.Status == "Active" ? "badge-success" : "badge-danger")">
+                                @doctor.Status
+                            </span>
+                        </td>
+                        <td class="actions">
+                            <button class="btn-edit" @onclick="() => ShowEditModal(doctor)">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn-delete" @onclick="() => ShowDeleteModal(doctor.Id)">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Doctor Modal -->
+@if (showAddModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Add New Doctor</h5>
+                    <button class="close-btn" @onclick="CloseModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input class="form-control" @bind="newDoctor.Name" />
+                    </div>
+                    <div class="form-group">
+                        <label>Specialization:</label>
+                        <input class="form-control" @bind="newDoctor.Specialization" />
+                    </div>
+                    <div class="form-group">
+                        <label>Contact:</label>
+                        <input class="form-control" @bind="newDoctor.Contact" />
+                    </div>
+                    <div class="form-group">
+                        <label>Email or Username:</label>
+                        <input class="form-control" @bind="newDoctor.UsernameOrEmail" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input type="password" class="form-control" @bind="newDoctor.Password" />
+                    </div>
+                    <div class="form-group">
+                        <label>Shift Time:</label>
+                        <input class="form-control" placeholder="e.g., 09:00-17:00" @bind="newDoctor.ShiftTime" />
+                    </div>
+                    <div class="form-group">
+                        <label>Day Off:</label>
+                        <select class="form-control" @bind="newDoctor.DayOff">
+                            <option value="">-- Select a day off --</option>
+                            @foreach (var day in Enum.GetValues(typeof(DayOfWeek)))
+                            {
+                                <option value="@((int)day)">@day</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status:</label>
+                        <select class="form-control" @bind="newDoctor.Status">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                    <button class="btn-save" @onclick="async () => await AddDoctor()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Edit Doctor Modal -->
+@if (showEditModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Edit Doctor</h5>
+                    <button class="close-btn" @onclick="CloseModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>ID:</label>
+                        <input class="form-control" @bind="currentDoctor.Id" disabled />
+                    </div>
+                    <div class="form-group">
+                        <label>Name:</label>
+                        <input class="form-control" @bind="currentDoctor.Name" />
+                    </div>
+                    <div class="form-group">
+                        <label>Specialization:</label>
+                        <input class="form-control" @bind="currentDoctor.Specialization" />
+                    </div>
+                    <div class="form-group">
+                        <label>Contact:</label>
+                        <input class="form-control" @bind="currentDoctor.Contact" />
+                    </div>
+                    <div class="form-group">
+                        <label>Email or Username:</label>
+                        <input class="form-control" @bind="currentDoctor.UsernameOrEmail" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input type="password" class="form-control" @bind="currentDoctor.Password" />
+                    </div>
+                    <div class="form-group">
+                        <label>Shift Time:</label>
+                        <input class="form-control" placeholder="e.g., 09:00-17:00" @bind="currentDoctor.ShiftTime" />
+                    </div>
+                    <div class="form-group">
+                        <label>Day Off:</label>
+                        <select class="form-control" @bind="currentDoctor.DayOff">
+                            <option value="">-- Select a day off --</option>
+                            @foreach (var day in Enum.GetValues(typeof(DayOfWeek)))
+                            {
+                                <option value="@((int)day)">@day</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status:</label>
+                        <select class="form-control" @bind="currentDoctor.Status">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                    <button class="btn-save" @onclick="async () => await UpdateDoctor()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Doctor Modal -->
+@if (showDeleteModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Confirm Deletion</h5>
+                    <button class="close-btn" @onclick="CloseModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this doctor?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-cancel" @onclick="CloseModal">Cancel</button>
+                    <button class="btn-danger" @onclick="async () => await ConfirmDelete()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Doctor> doctors = new();
+    private Doctor newDoctor = new();
+    private Doctor currentDoctor = new();
+    private int doctorIdToDelete;
+
+    private bool showAddModal = false;
+    private bool showEditModal = false;
+    private bool showDeleteModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        doctors = await DbContext.Doctors.ToListAsync();
+    }
+
+    private void ShowAddModal()
+    {
+        newDoctor = new Doctor();
+        showAddModal = true;
+    }
+
+    private void ShowEditModal(Doctor doctor)
+    {
+        currentDoctor = new Doctor
+        {
+            Id = doctor.Id,
+            Name = doctor.Name,
+            Specialization = doctor.Specialization,
+            Contact = doctor.Contact,
+            Status = doctor.Status,
+            UsernameOrEmail = doctor.UsernameOrEmail,
+            Password = doctor.Password,
+            ShiftTime = doctor.ShiftTime,
+            DayOff = doctor.DayOff
+        };
+        showEditModal = true;
+    }
+
+    private void ShowDeleteModal(int id)
+    {
+        doctorIdToDelete = id;
+        showDeleteModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showAddModal = false;
+        showEditModal = false;
+        showDeleteModal = false;
+    }
+
+    private async Task AddDoctor()
+    {
+        if (newDoctor == null || string.IsNullOrWhiteSpace(newDoctor.Name))
+            return;
+
+        DbContext.Doctors.Add(newDoctor);
+        await DbContext.SaveChangesAsync();
+        doctors.Add(newDoctor);
+        CloseModal();
+        StateHasChanged();
+    }
+
+    private async Task UpdateDoctor()
+    {
+        var doctor = await DbContext.Doctors.FindAsync(currentDoctor.Id);
+        if (doctor != null)
+        {
+            doctor.Name = currentDoctor.Name;
+            doctor.Specialization = currentDoctor.Specialization;
+            doctor.Contact = currentDoctor.Contact;
+            doctor.UsernameOrEmail = currentDoctor.UsernameOrEmail;
+            doctor.Password = currentDoctor.Password;
+            doctor.Status = currentDoctor.Status;
+            doctor.ShiftTime = currentDoctor.ShiftTime;
+            doctor.DayOff = currentDoctor.DayOff;
+
+            await DbContext.SaveChangesAsync();
+
+            var index = doctors.FindIndex(d => d.Id == doctor.Id);
+            if (index != -1)
+                doctors[index] = doctor;
+        }
+        CloseModal();
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var doctor = await DbContext.Doctors.FindAsync(doctorIdToDelete);
+        if (doctor != null)
+        {
+            DbContext.Doctors.Remove(doctor);
+            await DbContext.SaveChangesAsync();
+            doctors.Remove(doctor);
+        }
+        CloseModal();
+        StateHasChanged();
+    }
+}

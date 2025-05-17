@@ -1,0 +1,48 @@
+﻿@page "/"
+@page "/Admin_dash"
+@using System.Globalization
+
+
+<!-- Main Content -->
+
+            <h2 id="dashboard-title">Admin Dashboard</h2>
+
+        
+        <div class="stats-cards">
+            <div class="stats-card" id="appointments-card">
+                <h3>Today's Appointments</h3>
+                <p class="value" id="appointments-value">42</p>
+                <div class="change positive">
+                    <i class="fas fa-arrow-up"></i> <span id="appointments-change">12% from yesterday</span>
+                </div>
+            </div>
+            
+            <div class="stats-card" id="patients-card">
+                <h3>Patients Admitted</h3>
+                <p class="value" id="patients-value">18</p>
+                <div class="change negative">
+                    <i class="fas fa-arrow-down"></i> <span id="patients-change">5% from yesterday</span>
+                </div>
+            </div>
+            
+            <div class="stats-card" id="doctors-card">
+                <h3>Available Doctors</h3>
+                <p class="value" id="doctors-value">27</p>
+                <div class="change positive">
+                    <i class="fas fa-arrow-up"></i> <span id="doctors-change">3 new today</span>
+                </div>
+            </div>
+            
+            <div class="stats-card" id="tasks-card">
+                <h3>Pending Tasks</h3>
+                <p class="value" id="tasks-value">9</p>
+                <div class="change negative">
+                    <i class="fas fa-arrow-up"></i> <span id="tasks-change">2 new today</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dashboard-section" id="recent-appointments">
+            <h3>Recent Appointments</h3>
+            <p>// Placeholder for dynamic data</p>
+        </div>
